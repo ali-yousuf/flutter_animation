@@ -1,3 +1,5 @@
+import 'dart:math' show pi;
+
 import 'package:flutter/material.dart';
 
 void main() {
@@ -7,39 +9,23 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-      ),
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
       home: const MyHomePage(title: 'Flutter Demo Home Page'),
     );
   }
 }
 
+extension on VoidCallback {
+  Future<void> delayed(Duration duration) => Future.delayed(duration, this);
+}
+
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
 
   final String title;
 
@@ -47,69 +33,200 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
+  late AnimationController _rotationController;
+  late Animation<double> _rotationAnimation;
+  late AnimationController _flipAnimationController;
+  late Animation<double> _flipAnimation;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+    _rotationAnimation = Tween<double>(
+      begin: 0,
+      end: -(pi / 2.0),
+    ).animate(CurvedAnimation(
+      parent: _rotationController,
+      curve: Curves.bounceOut,
+    ));
+
+    _flipAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(
+        seconds: 1,
+      ),
+    );
+    _flipAnimation = Tween<double>(
+      begin: 0,
+      end: pi,
+    ).animate(
+      CurvedAnimation(
+        parent: _flipAnimationController,
+        curve: Curves.bounceOut,
+      ),
+    );
+
+    //rotation status listener
+    _rotationController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _flipAnimation = Tween<double>(
+          begin: _flipAnimation.value,
+          end: _flipAnimation.value + pi,
+        ).animate(
+          CurvedAnimation(
+            parent: _flipAnimationController,
+            curve: Curves.bounceOut,
+          ),
+        );
+        //reset the flip controller and start the animation
+        _flipAnimationController
+          ..reset()
+          ..forward();
+      }
+    });
+
+    //flip status listener
+    _flipAnimationController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _rotationAnimation = Tween<double>(
+          begin: _rotationAnimation.value,
+          end: _rotationAnimation.value + -(pi / 2.0),
+        ).animate(CurvedAnimation(
+          parent: _rotationController,
+          curve: Curves.bounceOut,
+        ));
+
+        _rotationController
+          ..reset()
+          ..forward();
+      }
     });
   }
 
   @override
+  void dispose() {
+    super.dispose();
+    _rotationController.dispose();
+    _flipAnimationController.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    _rotationController
+      ..reset()
+      ..forward.delayed(
+        const Duration(
+          seconds: 1,
+        ),
+      );
+
     return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        child: AnimatedBuilder(
+          animation: _rotationController,
+          builder: (context, child) {
+            return Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..rotateZ(
+                  _rotationAnimation.value,
+                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedBuilder(
+                      animation: _flipAnimationController,
+                      builder: (context, child) {
+                        return Transform(
+                          alignment: Alignment.centerRight,
+                          transform: Matrix4.identity()
+                            ..rotateY(
+                              _flipAnimation.value,
+                            ),
+                          child: ClipPath(
+                            clipper: LeftHalfCircleClipper(),
+                            child: Container(
+                              height: 100,
+                              width: 100,
+                              color: Colors.blue,
+                            ),
+                          ),
+                        );
+                      }),
+                  AnimatedBuilder(
+                      animation: _flipAnimationController,
+                      builder: (context, child) {
+                        return Transform(
+                          alignment: Alignment.centerLeft,
+                          transform: Matrix4.identity()
+                            ..rotateY(
+                              _flipAnimation.value,
+                            ),
+                          child: ClipPath(
+                            clipper: RightHalfCircleClipper(),
+                            child: Container(
+                              height: 100,
+                              width: 100,
+                              color: Colors.yellow,
+                            ),
+                          ),
+                        );
+                      }),
+                ],
+              ),
+            );
+          },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
+}
+
+class LeftHalfCircleClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    //move pencil to end of the width
+    path.moveTo(size.width, 0);
+    //end at
+    var offset = Offset(size.width, size.height);
+    path.arcToPoint(
+      offset,
+      radius: Radius.elliptical(
+        size.width / 2,
+        size.height / 2,
+      ),
+      clockwise: false,
+    );
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => true;
+}
+
+class RightHalfCircleClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    var offset = Offset(0, size.height);
+    path.arcToPoint(
+      offset,
+      radius: Radius.elliptical(
+        size.width / 2,
+        size.height / 2,
+      ),
+      clockwise: true,
+    );
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => true;
 }
